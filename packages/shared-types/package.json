@@ -1,0 +1,14 @@
+{
+  "name": "@taamim/shared-types",
+  "version": "1.0.0",
+  "description": "Shared TypeScript interfaces, DTOs, and domain models for Ta'amim",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}

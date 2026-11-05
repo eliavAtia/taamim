@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "Ta'amim",
+    "slug": "taamim",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "אפליקציית טעמים זקוקה לגישה למיקרופון כדי לבדוק את הדיוק שלך בנגינת טעמי המקרא."
+      }
+    },
+    "android": {
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "extra": {
+      "supportsRTL": true
+    }
+  }
+}

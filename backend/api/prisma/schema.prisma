@@ -1,0 +1,214 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ----------------------------------------------------
+// User & Auth & Gamification
+// ----------------------------------------------------
+
+model User {
+  id           String  @id @default(uuid())
+  email        String  @unique
+  username     String  @unique
+  passwordHash String  @map("password_hash")
+  displayName  String  @map("display_name")
+  avatarUrl    String? @map("avatar_url")
+
+  // Gamification Fields
+  totalXp         Int      @default(0) @map("total_xp")
+  leagueTier      String   @default("BRONZE") @map("league_tier") // BRONZE, SILVER, GOLD, SAPPHIRE, RUBY, DIAMOND
+  hearts          Int      @default(5)
+  lastHeartRefill DateTime @default(now()) @map("last_heart_refill")
+
+  // Daily Streak Fields
+  streakCount    Int       @default(0) @map("streak_count")
+  longestStreak  Int       @default(0) @map("longest_streak")
+  lastActiveDate DateTime? @map("last_active_date")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  progress         UserProgress[]
+  practiceAttempts UserPracticeAttempt[]
+  leagueHistory    UserLeagueHistory[]
+
+  @@map("users")
+}
+
+// ----------------------------------------------------
+// Cantillation Domain: Taamim & Cantors
+// ----------------------------------------------------
+
+model Taam {
+  id                String   @id @default(uuid())
+  nameHebrew        String   @map("name_hebrew") // e.g. "זַרְקָא", "סֶגּוֹל", "אֶתְנַחְתָּא"
+  nameEnglish       String   @map("name_english") // e.g. "Zarqa", "Segol", "Etnachta"
+  category          String // MAFSIK, MESHART
+  unicodeSymbol     String   @map("unicode_symbol") // Unicode character (U+0591 - U+05AF)
+  unicodeHex        String   @map("unicode_hex") // e.g. "U+0598"
+  descriptionHebrew String   @map("description_hebrew") // הסבר פדגוגי ומוזיקלי
+  sampleVerseHebrew String?  @map("sample_verse_hebrew") // פסוק לדוגמה ב-NFC
+  orderIndex        Int      @default(0) @map("order_index")
+  isActive          Boolean  @default(true) @map("is_active")
+  createdAt         DateTime @default(now()) @map("created_at")
+  taamSoundId       String?  @unique @map("taam_sound_id")
+
+  // Relations
+  taamSound   ReferenceRecording?  @relation("TaamSound", fields: [taamSoundId], references: [id], onDelete: SetNull)
+  recordings  ReferenceRecording[] @relation("TaamRecordings")
+  lessonItems LessonItem[]
+
+  @@map("taamim")
+}
+
+model Cantor {
+  id         String   @id @default(uuid())
+  nameHebrew String   @map("name_hebrew") // e.g. "ר' חיים לוק", "ר' מאיר עטר"
+  tradition  String   @default("MOROCCAN_GENERAL") // MOROCCAN_GENERAL, MOROCCAN_CASABLANCA, MOROCCAN_MEKNES, MOROCCAN_MARRAKECH, MOROCCAN_FES
+  bioHebrew  String?  @map("bio_hebrew")
+  avatarUrl  String?  @map("avatar_url")
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  // Relations
+  recordings ReferenceRecording[]
+
+  @@map("cantors")
+}
+
+model ReferenceRecording {
+  id            String  @id @default(uuid())
+  taamId        String  @map("taam_id")
+  cantorId      String  @map("cantor_id")
+  audioUrl      String  @map("audio_url") // URL to cloud storage or local asset
+  storagePath   String? @map("storage_path")
+  recordingType String  @default("TAAM_SAMPLE") @map("recording_type")
+  durationMs    Int     @map("duration_ms")
+  sampleRate    Int     @default(22050) @map("sample_rate")
+  tonicF0       Float   @map("tonic_f0") // Baseline Tonic F0 in Hz (Median)
+
+  // Pre-computed pitch contour points stored as JSON string in SQLite:
+  // Array of { timestampMs: number, f0Hz: number, semitoneRel: number, confidence: number }
+  pitchDataJson String @map("pitch_data_json")
+
+  isVerified Boolean  @default(true) @map("is_verified")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  // Relations
+  taam         Taam                  @relation("TaamRecordings", fields: [taamId], references: [id], onDelete: Cascade)
+  soundForTaam Taam?                 @relation("TaamSound")
+  cantor       Cantor                @relation(fields: [cantorId], references: [id], onDelete: Cascade)
+  userAttempts UserPracticeAttempt[]
+  lessonItems  LessonItem[]
+
+  @@map("reference_recordings")
+}
+
+// ----------------------------------------------------
+// Curriculum & Lessons
+// ----------------------------------------------------
+
+model CourseUnit {
+  id                String   @id @default(uuid())
+  titleHebrew       String   @map("title_hebrew") // e.g. "יחידה 1: פותחים בשניים - סוף פסוק ואתנח"
+  descriptionHebrew String?  @map("description_hebrew")
+  orderIndex        Int      @default(0) @map("order_index")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  lessons Lesson[]
+
+  @@map("course_units")
+}
+
+model Lesson {
+  id          String   @id @default(uuid())
+  unitId      String   @map("unit_id")
+  titleHebrew String   @map("title_hebrew") // e.g. "שיעור 1: נגינת האתנח במסורת מרוקו"
+  orderIndex  Int      @default(0) @map("order_index")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  unit     CourseUnit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  items    LessonItem[]
+  progress UserProgress[]
+
+  @@map("lessons")
+}
+
+model LessonItem {
+  id                   String  @id @default(uuid())
+  lessonId             String  @map("lesson_id")
+  taamId               String? @map("taam_id")
+  referenceRecordingId String? @map("reference_recording_id")
+  type                 String // EXPLANATION, PITCH_MATCH, VERSE_RECITATION, EAR_TRAINING
+  promptHebrew         String  @map("prompt_hebrew") // הוראה למשתמש
+  orderIndex           Int     @default(0) @map("order_index")
+
+  lesson             Lesson              @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  taam               Taam?               @relation(fields: [taamId], references: [id], onDelete: SetNull)
+  referenceRecording ReferenceRecording? @relation(fields: [referenceRecordingId], references: [id], onDelete: SetNull)
+
+  @@map("lesson_items")
+}
+
+// ----------------------------------------------------
+// User Submissions, Scoring & DTW Logs
+// ----------------------------------------------------
+
+model UserPracticeAttempt {
+  id                   String   @id @default(uuid())
+  userId               String   @map("user_id")
+  referenceRecordingId String   @map("reference_recording_id")
+  recordingUrl         String?  @map("recording_url") // Uploaded user WAV/M4A
+  userTonicF0          Float    @map("user_tonic_f0")
+  dtwDistance          Float    @map("dtw_distance")
+  accuracyScore        Float    @map("accuracy_score") // 0 - 100
+  pitchAccuracy        Float    @map("pitch_accuracy") // 0 - 100
+  timingAccuracy       Float    @map("timing_accuracy") // 0 - 100
+  isPassed             Boolean  @default(false) @map("is_passed")
+  feedbackJson         String?  @map("feedback_json")
+  xpEarned             Int      @default(0) @map("xp_earned")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  referenceRecording ReferenceRecording @relation(fields: [referenceRecordingId], references: [id], onDelete: Cascade)
+
+  @@map("user_practice_attempts")
+}
+
+model UserProgress {
+  id          String    @id @default(uuid())
+  userId      String    @map("user_id")
+  lessonId    String    @map("lesson_id")
+  status      String    @default("LOCKED") // LOCKED, UNLOCKED, COMPLETED, MASTERED
+  stars       Int       @default(0) // 1-3
+  highScore   Float     @default(0) @map("high_score")
+  completedAt DateTime? @map("completed_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, lessonId])
+  @@map("user_progress")
+}
+
+model UserLeagueHistory {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  weekStartDate DateTime @map("week_start_date")
+  leagueTier    String   @map("league_tier") // BRONZE, SILVER, etc.
+  finalRank     Int      @map("final_rank")
+  totalXp       Int      @map("total_xp")
+  isPromoted    Boolean  @default(false) @map("is_promoted")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_league_history")
+}
